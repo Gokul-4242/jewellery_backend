@@ -40,3 +40,41 @@ exports.login = async (req, res, next) => {
     next(error);
   }
 };
+
+// @desc    Register user
+// @route   POST /api/auth/register
+// @access  Public
+exports.register = async (req, res, next) => {
+  try {
+    const { name, email, password, phone } = req.body;
+
+    if (!name || !email || !password || !phone) {
+      return res.status(400).json({ success: false, message: 'Please provide all required fields' });
+    }
+
+    const userExists = await User.findOne({ email });
+
+    if (userExists) {
+      return res.status(400).json({ success: false, message: 'User already exists' });
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const user = await User.create({
+      name,
+      email,
+      phone,
+      password: hashedPassword
+    });
+
+    res.status(201).json({
+      success: true,
+      token: generateToken(user._id),
+      user: { id: user._id, name: user.name, role: user.role }
+    });
+  } catch (error) {
+    next(error);
+  }
+};

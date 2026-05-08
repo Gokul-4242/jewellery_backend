@@ -1,15 +1,25 @@
 const express = require('express');
 const router = express.Router();
-const { getProducts, getProductById, createProduct, updateStock } = require('../controllers/productController');
+const { 
+  getProducts, 
+  getProductById, 
+  createProduct, 
+  updateStock,
+  updateProduct,
+  deleteProduct
+} = require('../controllers/productController');
+const { protect, authorize } = require('../middlewares/authMiddleware');
 
 router.route('/')
   .get(getProducts)
-  .post(createProduct);
+  .post(protect, authorize('admin'), createProduct);
 
 router.route('/:id')
-  .get(getProductById);
+  .get(getProductById)
+  .put(protect, authorize('admin'), updateProduct)
+  .delete(protect, authorize('admin'), deleteProduct);
 
 router.route('/:id/stock')
-  .put(updateStock);
+  .put(protect, authorize('admin'), updateStock);
 
 module.exports = router;

@@ -11,7 +11,21 @@ exports.getProducts = async (req, res, next) => {
     const limit = parseInt(req.query.limit, 10) || 10;
     const startIndex = (page - 1) * limit;
 
+    const query = {};
+    if (req.query.material) {
+      query.material = { $regex: req.query.material, $options: 'i' };
+    }
+    if (req.query.search) {
+      const searchRegex = { $regex: req.query.search, $options: 'i' };
+      query.$or = [
+        { name: searchRegex },
+        { category: searchRegex },
+        { sku: searchRegex }
+      ];
+    }
+
     const products = await Product.aggregate([
+      { $match: query },
       {
         $lookup: {
           from: 'inventories',
@@ -40,7 +54,7 @@ exports.getProducts = async (req, res, next) => {
       { $limit: limit }
     ]);
 
-    const total = await Product.countDocuments();
+    const total = await Product.countDocuments(query);
 
     res.status(200).json({
       success: true,
@@ -73,11 +87,12 @@ exports.getProductById = async (req, res, next) => {
 // @access  Private/Admin
 exports.createProduct = async (req, res, next) => {
   try {
-    const product = await Product.create(req.body);
+    const { initialStock, ...productData } = req.body;
+    const product = await Product.create(productData);
 
     await Inventory.create({
       productId: product._id,
-      stock: 0
+      stock: initialStock || 0
     });
 
     res.status(201).json({ success: true, data: product });
@@ -122,3 +137,48 @@ exports.updateStock = async (req, res, next) => {
     next(error);
   }
 };
+
+// @desc    Update product details
+// @route   PUT /api/products/:id
+// @access  Private/Admin
+exports.updateProduct = async (req, res, next) => {
+  try {
+    let product = await Product.findById(req.params.id);
+
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    product = await Product.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true
+    });
+
+    res.status(200).json({ success: true, data: product });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete product
+// @route   DELETE /api/products/:id
+// @access  Private/Admin
+exports.deleteProduct = async (req, res, next) => {
+  try {
+    const product = await Product.findById(req.params.id);
+
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    // Delete associated inventory
+    await Inventory.findOneAndDelete({ productId: req.params.id });
+
+    await product.deleteOne();
+
+    res.status(200).json({ success: true, data: {} });
+  } catch (error) {
+    next(error);
+  }
+};
+

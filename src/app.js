@@ -12,6 +12,8 @@ const transactionRoutes = require('./routes/transactionRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const webhookRoutes = require('./routes/webhookRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
+const cartRoutes = require('./routes/cartRoutes');
+
 
 // Security and CORS middlewares
 app.use(helmet());
@@ -36,6 +38,8 @@ app.use('/api/products', productRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/cart', cartRoutes);
+
 
 // Global Error Handler
 app.use((err, req, res, next) => {
