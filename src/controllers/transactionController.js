@@ -24,7 +24,7 @@ const calculatePrice = (product, reqItem, rateDoc) => {
 // @access  Private/Admin
 exports.createTransaction = async (req, res, next) => {
   try {
-    const { customerId, items, gst, discount, exchangeAmount, idempotencyKey } = req.body;
+    const { customerId, customerName, items, gst, discount, exchangeAmount, status, paymentStatus, deadline, idempotencyKey } = req.body;
     
     // Idempotency check 
     if (idempotencyKey) {
@@ -42,33 +42,50 @@ exports.createTransaction = async (req, res, next) => {
 
     // Phase 1: Verify & Calculate Backend Price
     for (const item of items) {
-      const product = await Product.findById(item.productId);
-      if (!product) return res.status(404).json({ success: false, message: `Product ${item.productId} not found.` });
+      if (item.productId) {
+        const product = await Product.findById(item.productId);
+        if (!product) return res.status(404).json({ success: false, message: `Product ${item.productId} not found.` });
 
-      const { rateAtTime, finalPrice } = calculatePrice(product, item, currentRates);
+        const { rateAtTime, finalPrice } = calculatePrice(product, item, currentRates);
 
-      transactionItems.push({
-        productId: product._id,
-        weight: item.weight || product.weight,
-        rateAtTime,
-        makingCharge: product.makingCharge,
-        wastagePercent: product.wastagePercent,
-        finalPrice
-      });
+        transactionItems.push({
+          productId: product._id,
+          name: product.name,
+          weight: item.weight || product.weight,
+          rateAtTime,
+          makingCharge: product.makingCharge,
+          wastagePercent: product.wastagePercent,
+          finalPrice
+        });
 
-      totalAmount += finalPrice;
+        totalAmount += finalPrice;
+      } else {
+        // Custom/Bespoke item without a pre-existing product ID
+        transactionItems.push({
+          name: item.name || 'Custom Item',
+          weight: item.weight || 0,
+          rateAtTime: currentRates.gold22k, // Default reference
+          makingCharge: item.makingCharges || 0,
+          wastagePercent: item.wastage || 0,
+          finalPrice: item.total || 0
+        });
+        totalAmount += (item.total || 0);
+      }
     }
 
     const finalBillAmount = Math.round((totalAmount + (gst || 0)) - (discount || 0) - (exchangeAmount || 0));
 
     // Phase 2: Atomic Stock Deduction (Strict check)
     for (const item of items) {
+      if (!item.productId) continue; // Skip stock deduction for custom items
+
       const qty = item.quantity || 1;
       const inv = await Inventory.findOneAndUpdate(
         { productId: item.productId, stock: { $gte: qty } },
         { $inc: { stock: -qty }, $set: { lastUpdatedAt: Date.now() } },
         { new: true }
       );
+
 
       if (!inv) {
          // Fail gracefully without multi-doc transaction overhead, as per simplified strategy
@@ -88,14 +105,17 @@ exports.createTransaction = async (req, res, next) => {
 
     const transaction = await Transaction.create({
       invoiceNo,
-      customerId,
+      customerName: customerName || 'Unknown Customer',
       items: transactionItems,
       gst: gst || 0,
       discount: discount || 0,
       exchangeAmount: exchangeAmount || 0,
       totalAmount: finalBillAmount,
-      paymentStatus: 'paid' 
+      status: status || 'Pending',
+      paymentStatus: paymentStatus || 'Paid',
+      deadline: deadline 
     });
+
 
     await AuditLog.create({
       entity: 'transaction',
@@ -109,3 +129,36 @@ exports.createTransaction = async (req, res, next) => {
     next(error);
   }
 };
+
+// @desc    Get all transactions
+// @route   GET /api/transactions
+// @access  Private/Admin
+exports.getTransactions = async (req, res, next) => {
+  try {
+    const transactions = await Transaction.find().sort({ createdAt: -1 });
+    res.status(200).json({ success: true, data: transactions });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update a transaction (status/deadline)
+// @route   PUT /api/transactions/:id
+// @access  Private/Admin
+exports.updateTransaction = async (req, res, next) => {
+  try {
+    const transaction = await Transaction.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true
+    });
+
+    if (!transaction) {
+      return res.status(404).json({ success: false, message: 'Transaction not found' });
+    }
+
+    res.status(200).json({ success: true, data: transaction });
+  } catch (error) {
+    next(error);
+  }
+};
+

@@ -6,6 +6,7 @@ const app = express();
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
+const customerAuthRoutes = require('./routes/customerAuthRoutes');
 const rateRoutes = require('./routes/rateRoutes');
 const productRoutes = require('./routes/productRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
@@ -13,6 +14,8 @@ const orderRoutes = require('./routes/orderRoutes');
 const webhookRoutes = require('./routes/webhookRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const cartRoutes = require('./routes/cartRoutes');
+const billingRoutes = require('./routes/billingRoutes');
+const customerRoutes = require('./routes/customerRoutes');
 
 
 // Security and CORS middlewares
@@ -33,12 +36,17 @@ app.get('/api/health', (req, res) => {
 
 // Mount routers
 app.use('/api/auth', authRoutes);
+app.use('/api/customer/auth', customerAuthRoutes);
 app.use('/api/rates', rateRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/billing', billingRoutes);
 app.use('/api/upload', uploadRoutes);
+
 app.use('/api/cart', cartRoutes);
+app.use('/api/customers', customerRoutes);
+
 
 
 // Global Error Handler
